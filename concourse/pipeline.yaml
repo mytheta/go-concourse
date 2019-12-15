@@ -1,0 +1,83 @@
+#######
+### GROUPS
+#######
+groups:
+  - name: api
+    jobs:
+      - go-test
+#######
+### JOBS
+#######
+jobs:
+  - name: go-test
+    plan:
+      - get: go-concourse-src
+        trigger: true
+      - put: go-concourse-status
+        params: { state: pending, commit: go-concourse-src }
+      - task: go-build
+        file: go-concourse-src/concourse/tasks/build.yaml
+        on_success:
+          do:
+            - put: go-concourse-status
+              params: { state: success, commit: go-concourse-src }
+            - put: notify
+              params:
+                attachments:
+                  - fallback: "テスト成功 :+1:"
+                    color: good
+                    title: Succeeded
+                    text: "テスト成功 :+1:"
+        on_failure:
+          do:
+            - put: go-concourse-status
+              params: { state: failure , commit: go-concourse-src }
+            - put: notify
+              params:
+                attachments:
+                  - fallback: "テスト失敗 :fire:"
+                    color: danger
+                    title: Failed
+                    text: "テスト失敗 :fire:"
+#######
+### RESOURCES
+#######
+resources:
+  - name: go-concourse-src
+    type: git-resource
+    icon: git
+    check_every: 600h
+    webhook_token: go
+    source:
+      uri: git@github.com:mytheta/go-concourse.git
+      branches: '.*'
+      private_key: ((private_key))
+  - name: go-concoourse-status
+    type: github-status-resource
+    icon: github-circle
+    source:
+      repository: mytheta/go-concourse
+      access_token: ((github-access-token))
+      context: concourse-ci
+  - name: notify
+    type: slack-resource
+    icon: slack
+    source:
+      url: ((slack-url))
+#######
+### RESOURCE_TYPES
+#######
+resource_types:
+  - name: github-status-resource
+    type: docker-image
+    source:
+      repository: dpb587/github-status-resource
+      tag: master
+  - name: slack-resource
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+  - name: git-resource
+    type: docker-image
+    source:
+      repository: cfcommunity/git-multibranch-resource
